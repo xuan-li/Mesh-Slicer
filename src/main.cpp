@@ -1,9 +1,9 @@
 #include <MeshDefinition.h>
+#include <MeshMarker.h>
 #include <MeshSlicer.h>
 #include <iostream>
 #include <list>
 #include <vector>
-#include <MeshMarker.h>
 
 int main(int argc, char **argv)
 {
@@ -13,7 +13,7 @@ int main(int argc, char **argv)
 
     OpenMesh::IO::read_mesh(mesh, argv[1]);
     std::cout << "find vertices: " << mesh.n_vertices() << std::endl;
-	MeshMarker marker;
+    MeshMarker marker;
     marker.SetObject(mesh);
     marker.LoadFromFile(argv[2]);
 
@@ -23,5 +23,10 @@ int main(int argc, char **argv)
     slicer.SliceAccordingToWedge(sliced_mesh);
 
     OpenMesh::IO::write_mesh(sliced_mesh, argv[3]);
+
+    if (argc >= 5)
+    {
+        slicer.OutputVertexCorrespondences(argv[4]);
+    }
     return 0;
 }

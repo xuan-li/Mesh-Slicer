@@ -22,7 +22,7 @@ class MeshSlicer
     void AddOnCutEdge(OpenMesh::EdgeHandle e) { mesh_.property(on_cut_, e) = true; }
     void SetOnCutEdges(OpenMesh::EPropHandleT<bool> &on_cut) { on_cut_ = on_cut; }
     OpenMesh::VPropHandleT<std::vector<OpenMesh::VertexHandle>> split_to() { return split_to_; }
-
+    void OutputVertexCorrespondences(std::string filename);
   protected:
     SurfaceMesh &mesh_;
     OpenMesh::VertexHandle base_point_;
