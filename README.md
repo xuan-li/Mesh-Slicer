@@ -19,7 +19,7 @@ cmake .. -G "Visual Studio 15 2017 Win64" -DOpenMesh_DIR=your_installation_path
 ## Usage
 
 ```
-MeshSlicer.exe model_file path_file output_path
+MeshSlicer.exe model_file path_file output_path [old-new-correspondence]
 ```
 Note that the program has only been tested on Windows.
 
