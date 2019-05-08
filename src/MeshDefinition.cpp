@@ -48,9 +48,18 @@ void SurfaceMesh::RequestBoundary()
 
 std::vector<std::vector<OpenMesh::HalfedgeHandle>> SurfaceMesh::GetBoundaries()
 {
-	return boundaries;
-}
+	return boundaries; }
 
+
+OpenMesh::EdgeHandle SurfaceMesh::FaceFaceIntersection(FaceHandle &f1, FaceHandle &f2)
+{
+    for (auto fhiter = fh_iter(f1); fhiter.is_valid(); ++fhiter)
+    {
+        HalfedgeHandle h = *fhiter;
+        if (opposite_face_handle(h) == f2)
+            return edge_handle(h);
+    }
+}
 void NormalizeMesh(SurfaceMesh & mesh)
 {
 	using namespace OpenMesh;

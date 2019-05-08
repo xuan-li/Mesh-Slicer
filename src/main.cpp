@@ -13,20 +13,13 @@ int main(int argc, char **argv)
 
     OpenMesh::IO::read_mesh(mesh, argv[1]);
     std::cout << "find vertices: " << mesh.n_vertices() << std::endl;
-    MeshMarker marker;
-    marker.SetObject(mesh);
-    marker.LoadFromFile(argv[2]);
-
+    MeshMarker marker(mesh);
     MeshSlicer slicer(mesh);
+    marker.ComputeCutGraph();
+
     slicer.SetOnCutEdges(marker.slice_flag());
     slicer.ConstructWedge();
     slicer.SliceAccordingToWedge(sliced_mesh);
-
-    OpenMesh::IO::write_mesh(sliced_mesh, argv[3]);
-
-    if (argc >= 5)
-    {
-        slicer.OutputVertexCorrespondences(argv[4]);
-    }
+    OpenMesh::IO::write_mesh(sliced_mesh, argv[2]);
     return 0;
 }

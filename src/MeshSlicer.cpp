@@ -2,6 +2,7 @@
 #include <fstream>
 #include <list>
 #include <map>
+#include <queue>
 
 MeshSlicer::MeshSlicer(SurfaceMesh &mesh) : mesh_(mesh)
 {
@@ -20,70 +21,9 @@ void MeshSlicer::ResetFlags()
     }
 }
 
-void MeshSlicer::SliceMeshToDisk(SurfaceMesh &slice_mesh)
-{
-    int euler = mesh_.n_vertices() - mesh_.n_edges() + mesh_.n_faces();
-    if (euler == 2)
-        FindAndMarkCutGraphSphere();
-    else
-        FindAndMarkCutGraphNonSphere();
-    ConstructWedge();
-    SliceAccordingToWedge(slice_mesh);
-}
-
 std::vector<OpenMesh::VertexHandle> MeshSlicer::SplitTo(OpenMesh::VertexHandle v) { return mesh_.property(split_to_, v); }
 
 OpenMesh::HalfedgeHandle MeshSlicer::ConvertTo(OpenMesh::HalfedgeHandle h) { return mesh_.property(convert_to_, h); }
-
-std::vector<OpenMesh::VertexHandle> MeshSlicer::GetLongestPath() { return longest_path_; }
-
-void MeshSlicer::FindAndMarkCutGraphSphere()
-{
-    using namespace OpenMesh;
-    base_point_ = *(mesh_.vertices_begin());
-    OpenMesh::VPropHandleT<double> dist;
-    OpenMesh::VPropHandleT<OpenMesh::VertexHandle> parent;
-    DijkstraShortestDist(mesh_, base_point_, dist, parent);
-
-    // Find the biggest dist
-    double max_dist = 0;
-    VertexHandle end;
-    for (auto viter = mesh_.vertices_begin(); viter != mesh_.vertices_end(); ++viter)
-    {
-        VertexHandle v = *viter;
-        if (mesh_.property(dist, v) > max_dist)
-        {
-            max_dist = mesh_.property(dist, v);
-            end = v;
-        }
-    }
-
-    std::vector<VertexHandle> longest_path_vertices;
-
-    VertexHandle cptr = end;
-    longest_path_vertices.push_back(end);
-    while (mesh_.property(parent, cptr).is_valid())
-    {
-        cptr = mesh_.property(parent, cptr);
-        longest_path_vertices.push_back(cptr);
-    }
-
-    std::reverse(longest_path_vertices.begin(), longest_path_vertices.end());
-
-    longest_path_ = longest_path_vertices;
-    for (auto eiter = mesh_.edges_begin(); eiter != mesh_.edges_end(); ++eiter)
-    {
-        OpenMesh::EdgeHandle e = *eiter;
-        mesh_.property(on_cut_, e) = false;
-    }
-    for (int i = 0; i < longest_path_vertices.size() - 1; ++i)
-    {
-        EdgeHandle e = mesh_.edge_handle(mesh_.find_halfedge(longest_path_vertices[i], longest_path_vertices[i + 1]));
-        mesh_.property(on_cut_, e) = true;
-    }
-}
-
-void MeshSlicer::FindAndMarkCutGraphNonSphere() {}
 
 void MeshSlicer::ConstructWedge()
 {
@@ -202,35 +142,4 @@ void MeshSlicer::SliceAccordingToWedge(SurfaceMesh &new_mesh)
     }
 
     new_mesh.RequestBoundary();
-
-    // for (auto eiter = mesh_.edges_begin(); eiter != mesh_.edges_end(); ++eiter) {
-    //	EdgeHandle e = *eiter;
-    //	HalfedgeHandle h0 = mesh_.halfedge_handle(e, 0);
-    //	HalfedgeHandle h1 = mesh_.halfedge_handle(e, 1);
-    //	HalfedgeHandle new_h0 = mesh_.property(halfedge_split_to, h0);
-    //	HalfedgeHandle new_h1 = mesh_.property(halfedge_split_to, h1);
-    //	if (mesh_.is_boundary(e)) {
-    //		assert(new_h0.is_valid());
-    //		assert(new_h1.is_valid());
-    //	}
-    //	//new_mesh.data(new_h0).set_original_opposition(new_h1);
-    //	//new_mesh.data(new_h1).set_original_opposition(new_h0);
-    //}
-}
-
-void MeshSlicer::OutputVertexCorrespondences(std::string filename)
-{
-    using namespace OpenMesh;
-    std::ofstream f(filename);
-    if (f.is_open())
-    {
-        for (auto viter = mesh_.vertices_begin(); viter != mesh_.vertices_end(); ++viter)
-        {
-            VertexHandle v = *viter;
-            for (auto nv : mesh_.property(split_to_, v))
-            {
-                f << v.idx() << " " << nv.idx() << std::endl;
-            }
-        }
-    }
 }

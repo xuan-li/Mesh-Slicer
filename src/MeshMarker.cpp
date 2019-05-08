@@ -1,14 +1,11 @@
 #include "MeshMarker.h"
+#include "queue"
 
-void MeshMarker::SetObject(SurfaceMesh &mesh)
-{
-    p_mesh_ = &mesh;
-    mesh.add_property(slice_);
-}
+MeshMarker::MeshMarker(SurfaceMesh &mesh) : mesh_(mesh) { mesh.add_property(slice_); }
 
 void MeshMarker::ResetMarker()
 {
-    SurfaceMesh &mesh = *p_mesh_;
+    SurfaceMesh &mesh = mesh_;
     using namespace OpenMesh;
     for (auto eiter = mesh.edges_begin(); eiter != mesh.edges_end(); ++eiter)
     {
@@ -18,23 +15,54 @@ void MeshMarker::ResetMarker()
 }
 
 // Compute the shortest path between two vertex and set slice flag.
-void MeshMarker::ComputeAndSetSlice(OpenMesh::VertexHandle v0, OpenMesh::VertexHandle v1)
+void MeshMarker::ConnectVertexPair(OpenMesh::VertexHandle v0, OpenMesh::VertexHandle v1)
 {
-    SurfaceMesh &mesh = *p_mesh_;
+    SurfaceMesh &mesh = mesh_;
     using namespace OpenMesh;
-    VPropHandleT<double> dist;
     VPropHandleT<VertexHandle> parent;
+    VPropHandleT<bool> visited;
+    mesh.add_property(parent);
+    mesh.add_property(visited);
 
-    DijkstraShortestDist(mesh, v0, dist, parent);
-    std::vector<VertexHandle> slice_vertices;
-
-    VertexHandle cptr = v1;
-    slice_vertices.push_back(v1);
-    while (mesh.property(parent, cptr).is_valid())
+    // reset visited
+    for (auto viter = mesh_.vertices_begin(); viter != mesh_.vertices_end(); ++viter)
     {
-        cptr = mesh.property(parent, cptr);
-        slice_vertices.push_back(cptr);
+        VertexHandle v = *viter;
+        mesh_.property(visited, v) = false;
     }
+
+    mesh_.property(visited, v0) = true;
+
+    std::queue<VertexHandle> q;
+    q.push(v0);
+
+    bool found = false;
+    while (!q.empty() && !found)
+    {
+        VertexHandle front = q.front();
+        q.pop();
+        for (auto vviter = mesh_.vv_iter(front); vviter.is_valid(); ++vviter)
+        {
+            VertexHandle neighbor = *vviter;
+            if (!mesh_.property(visited, neighbor))
+            {
+                mesh_.property(visited, neighbor) = true;
+                q.push(neighbor);
+                mesh_.property(parent, neighbor) = front;
+                if (neighbor == v1)
+                    found = true;
+            }
+        }
+    }
+    mesh_.remove_property(visited);
+
+    std::vector<VertexHandle> slice_vertices;
+    slice_vertices.push_back(v1);
+    while (slice_vertices.back() != v0)
+    {
+        slice_vertices.push_back(mesh_.property(parent, slice_vertices.back()));
+    }
+    mesh_.remove_property(parent);
 
     std::reverse(slice_vertices.begin(), slice_vertices.end());
 
@@ -48,60 +76,151 @@ void MeshMarker::ComputeAndSetSlice(OpenMesh::VertexHandle v0, OpenMesh::VertexH
     }
 }
 
-void MeshMarker::LoadFromFile(std::string filename)
+void MeshMarker::ComputeCutGraph()
+{
+    if (cut_graph_.is_valid())
+        return;
+    mesh_.add_property(cut_graph_);
+    int euler = mesh_.n_vertices() - mesh_.n_edges() + mesh_.n_faces();
+    if (euler == 2)
+        FindAndMarkCutGraphSphere();
+    else
+        FindAndMarkCutGraphNonSphere();
+}
+
+void MeshMarker::ConnectVerticesToCutGraph(std::vector<OpenMesh::VertexHandle> vertices) {}
+
+void MeshMarker::FindAndMarkCutGraphSphere()
 {
     using namespace OpenMesh;
-    SurfaceMesh &mesh = *p_mesh_;
-    ResetMarker();
+    auto base_point = *(mesh_.vertices_begin());
+    OpenMesh::VPropHandleT<double> dist;
+    OpenMesh::VPropHandleT<OpenMesh::VertexHandle> parent;
+    DijkstraShortestDist(mesh_, base_point, dist, parent);
 
-    std::ifstream ins(filename);
-    if (ins.is_open())
+    // Find the biggest dist
+    double max_dist = 0;
+    VertexHandle end;
+    for (auto viter = mesh_.vertices_begin(); viter != mesh_.vertices_end(); ++viter)
     {
-        std::string line;
-        while (std::getline(ins, line))
+        VertexHandle v = *viter;
+        if (mesh_.property(dist, v) > max_dist)
         {
-            std::stringstream ss(line);
-            std::string mode;
-            ss >> mode;
-
-            if (mode != "v" && mode != "e")
-                continue;
-
-            std::vector<int> path;
-            int index;
-            while (ss >> index)
-            {
-                path.push_back(index);
-            }
-
-            if (mode == "v") // vertex sequence on the cut curve, may not be consecutive
-            {
-                for (int i = 0; i < path.size() - 1; ++i)
-                    ComputeAndSetSlice(mesh.vertex_handle(path[i]), mesh.vertex_handle(path[i + 1]));
-            }
-
-            else if (mode == "e")
-            {
-                for (auto i : path)
-                {
-                    EdgeHandle e = mesh.edge_handle(i);
-                    mesh.property(slice_, e) = true;
-                }
-            }
+            max_dist = mesh_.property(dist, v);
+            end = v;
         }
+    }
+
+    std::vector<VertexHandle> longest_path_vertices;
+
+    VertexHandle cptr = end;
+    longest_path_vertices.push_back(end);
+    while (mesh_.property(parent, cptr).is_valid())
+    {
+        cptr = mesh_.property(parent, cptr);
+        longest_path_vertices.push_back(cptr);
+    }
+
+    std::reverse(longest_path_vertices.begin(), longest_path_vertices.end());
+
+    longest_path_vertices;
+    for (auto eiter = mesh_.edges_begin(); eiter != mesh_.edges_end(); ++eiter)
+    {
+        OpenMesh::EdgeHandle e = *eiter;
+        mesh_.property(cut_graph_, e) = false;
+    }
+    for (int i = 0; i < longest_path_vertices.size() - 1; ++i)
+    {
+        EdgeHandle e = mesh_.edge_handle(mesh_.find_halfedge(longest_path_vertices[i], longest_path_vertices[i + 1]));
+        mesh_.property(cut_graph_, e) = true;
     }
 }
 
-void MeshMarker::SaveToFile(std::string filename)
+void MeshMarker::FindAndMarkCutGraphNonSphere()
 {
     using namespace OpenMesh;
-    SurfaceMesh &mesh = *p_mesh_;
-
-    std::ofstream f(filename);
-    f << "e ";
-    for (auto eiter = mesh.edges_begin(); eiter != mesh.edges_end(); ++eiter)
+    for (auto eiter = mesh_.edges_begin(); eiter != mesh_.edges_end(); ++eiter)
     {
-        f << " " << eiter->idx();
+        OpenMesh::EdgeHandle e = *eiter;
+        mesh_.property(cut_graph_, e) = true;
     }
-    f.close();
+
+    FPropHandleT<bool> visited;
+    mesh_.add_property(visited);
+    for (auto fiter = mesh_.faces_begin(); fiter != mesh_.faces_end(); ++fiter)
+    {
+        FaceHandle f = *fiter;
+        mesh_.property(visited, f) = false;
+    }
+
+    std::queue<FaceHandle> q;
+    auto root_face = *mesh_.faces_begin();
+    q.push(root_face);
+    mesh_.property(visited, root_face) = true;
+    while (!q.empty())
+    {
+        auto front = q.front();
+        q.pop();
+        for (auto ffiter = mesh_.ff_iter(front); ffiter.is_valid(); ++ffiter)
+        {
+            auto neighbor = *ffiter;
+            if (!mesh_.property(visited, neighbor))
+            {
+                mesh_.property(visited, neighbor) = true;
+                auto intersect = mesh_.FaceFaceIntersection(front, neighbor);
+                mesh_.property(cut_graph_, intersect) = false;
+                q.push(neighbor);
+            }
+        }
+    }
+    mesh_.remove_property(visited);
+    PruneCut();
+}
+
+void MeshMarker::PruneCut()
+{
+    using namespace OpenMesh;
+    bool cont;
+    do
+    {
+        cont = false;
+        for (auto viter = mesh_.vertices_begin(); viter != mesh_.vertices_end(); ++viter)
+        {
+            VertexHandle v = *viter;
+            std::vector<HalfedgeHandle> he_on_cut;
+            for (auto vhiter = mesh_.vih_iter(v); vhiter.is_valid(); ++vhiter)
+            {
+                HalfedgeHandle h = *vhiter;
+                EdgeHandle e = mesh_.edge_handle(h);
+                if (mesh_.property(cut_graph_, e))
+                {
+                    he_on_cut.push_back(h);
+                }
+            }
+            if (he_on_cut.size() == 1)
+            {
+                mesh_.property(cut_graph_, mesh_.edge_handle(he_on_cut.front())) = false;
+                cont = true;
+            }
+            if (he_on_cut.size() == 2)
+            {
+                auto h1 = he_on_cut.front();
+                auto h2 = he_on_cut.back();
+                if (mesh_.next_halfedge_handle(h1) == mesh_.opposite_halfedge_handle(h2))
+                {
+                    mesh_.property(cut_graph_, mesh_.edge_handle(h1)) = false;
+                    mesh_.property(cut_graph_, mesh_.edge_handle(h2)) = false;
+                    mesh_.property(cut_graph_, mesh_.edge_handle(mesh_.prev_halfedge_handle(h1))) = true;
+                    cont = true;
+                }
+                if (mesh_.next_halfedge_handle(h2) == mesh_.opposite_halfedge_handle(h1))
+                {
+                    mesh_.property(cut_graph_, mesh_.edge_handle(h1)) = false;
+                    mesh_.property(cut_graph_, mesh_.edge_handle(h2)) = false;
+                    mesh_.property(cut_graph_, mesh_.edge_handle(mesh_.prev_halfedge_handle(h2))) = true;
+                    cont = true;
+                }
+            }
+        }
+    } while (cont);
 }

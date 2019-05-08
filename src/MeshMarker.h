@@ -12,16 +12,22 @@
 class MeshMarker
 {
   public:
-    void SetObject(SurfaceMesh &mesh);
+    MeshMarker(SurfaceMesh &mesh);
     void ResetMarker();
-    void ComputeAndSetSlice(OpenMesh::VertexHandle v0, OpenMesh::VertexHandle v1);
-    void LoadFromFile(std::string filename);
-    void SaveToFile(std::string filename);
+    void ConnectVertexPair(OpenMesh::VertexHandle v0, OpenMesh::VertexHandle v1);
+    void ComputeCutGraph();
+    void ConnectVerticesToCutGraph(std::vector<OpenMesh::VertexHandle> vertices);
     OpenMesh::EPropHandleT<bool> slice_flag() const { return slice_; }
+    void SetSliceFlagByCutGraph() { slice_ = cut_graph_; }
+    void AddSlice(OpenMesh::EdgeHandle e) { mesh_.property(slice_, e) = true; }
 
   protected:
-    SurfaceMesh *p_mesh_;
+    void FindAndMarkCutGraphSphere();
+    void FindAndMarkCutGraphNonSphere();
+    void PruneCut();
+    SurfaceMesh &mesh_;
     OpenMesh::EPropHandleT<bool> slice_;
+    OpenMesh::EPropHandleT<bool> cut_graph_;
 };
 
 #endif // !MESH_MARKER_H_

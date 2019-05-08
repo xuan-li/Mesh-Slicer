@@ -20,15 +20,18 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake" CAC
 ####################### precompiled dependencies ####################
 
 find_package(OpenMesh REQUIRED)
-
+include_directories(src ${OpenMesh_INCLUDE_DIR})
+link_libraries(${OpenMesh_LIBRARIES})
 
 ##################### import files ################
 
 # if you want to import all:
 
-file(GLOB SOURCES src/*.cpp)
-file(GLOB HEADERS src/*.h)
-
+file(GLOB SOURCES src/Mesh*.cpp src/D*.cpp)
+file(GLOB HEADERS src/Mesh*.h src/D*.h)
+add_library(${CMAKE_PROJECT_NAME} ${HEADERS} ${SOURCES})
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${OpenMesh_LIBRARIES})
+add_definitions(-D_USE_MATH_DEFINES)
 ####################### add library #########################
 
 # if you need dependencies:
@@ -39,14 +42,15 @@ file(GLOB HEADERS src/*.h)
 
 ######################## add executable ##########################
 
-add_executable(${CMAKE_PROJECT_NAME}  ${HEADERS} ${SOURCES})
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE src ${OpenMesh_INCLUDE_DIR})
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${OpenMesh_LIBRARIES})
+add_executable(${CMAKE_PROJECT_NAME}Test src/main.cpp)
+target_link_libraries(${CMAKE_PROJECT_NAME}Test PRIVATE ${CMAKE_PROJECT_NAME})
 add_definitions(-D_USE_MATH_DEFINES)
 
 ####################### installing configure ####################
+configure_file(PackageConfig.cmake.in ${CMAKE_PROJECT_NAME}Config.cmake @ONLY)
 install(TARGETS ${CMAKE_PROJECT_NAME}
   RUNTIME DESTINATION bin
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
 )
+

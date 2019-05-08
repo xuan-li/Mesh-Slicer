@@ -100,11 +100,14 @@ public:
 	SurfaceMesh();
 	void RequestBoundary();
 	std::vector<std::vector<HalfedgeHandle>> GetBoundaries();
-protected:
+    OpenMesh::EdgeHandle FaceFaceIntersection(FaceHandle &f1, FaceHandle &f2);
+
+      protected:
 	std::vector<std::vector<HalfedgeHandle>> boundaries;
 };
 
 
 void NormalizeMesh(SurfaceMesh &mesh);
+
 
 #endif
