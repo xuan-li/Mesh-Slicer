@@ -14,8 +14,8 @@ class MeshMarker
   public:
     MeshMarker(SurfaceMesh &mesh);
     void ResetMarker();
-    void ConnectVertexPair(OpenMesh::VertexHandle v0, OpenMesh::VertexHandle v1);
     void ComputeCutGraph();
+    void ConnectVertices(std::vector<OpenMesh::VertexHandle> vertices);
     void ConnectVerticesToCutGraph(std::vector<OpenMesh::VertexHandle> vertices);
     OpenMesh::EPropHandleT<bool> slice_flag() const { return slice_; }
     void SetSliceFlagByCutGraph() { slice_ = cut_graph_; }
@@ -25,6 +25,9 @@ class MeshMarker
     void FindAndMarkCutGraphSphere();
     void FindAndMarkCutGraphNonSphere();
     void PruneCut();
+    void ConnectVertexPair(OpenMesh::VertexHandle v0, OpenMesh::VertexHandle v1);
+    void ConnectVertexToCutGraph(OpenMesh::VertexHandle v);
+    bool OnSelectedEdge(OpenMesh::VertexHandle v, const OpenMesh::EPropHandleT<bool> flag);
     SurfaceMesh &mesh_;
     OpenMesh::EPropHandleT<bool> slice_;
     OpenMesh::EPropHandleT<bool> cut_graph_;

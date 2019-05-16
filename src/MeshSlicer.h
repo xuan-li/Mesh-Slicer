@@ -13,7 +13,6 @@ class MeshSlicer
     void ResetFlags();
     std::vector<OpenMesh::VertexHandle> SplitTo(OpenMesh::VertexHandle v);
     OpenMesh::HalfedgeHandle ConvertTo(OpenMesh::HalfedgeHandle h);
-    std::vector<OpenMesh::VertexHandle> GetLongestPath();
     void ConstructWedge();
     void SliceAccordingToWedge(SurfaceMesh &sliced_mesh);
     void AddOnCutEdge(OpenMesh::EdgeHandle e) { mesh_.property(on_cut_, e) = true; }
@@ -27,7 +26,6 @@ class MeshSlicer
     // one halfedge on the original mesh will appear once and only once on sliced mesh;
     OpenMesh::HPropHandleT<OpenMesh::HalfedgeHandle> convert_to_;
     OpenMesh::HPropHandleT<OpenMesh::HalfedgeHandle> original_reflection_;
-    std::vector<OpenMesh::EdgeHandle> cut_graph_;
     
 
 };

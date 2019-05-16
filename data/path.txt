@@ -1,7 +1,0 @@
-# multiple paths supported
-
-# cut a disk, the vertices need not to be consecutive
-v 4465 587 1505 1509 4574 4465
-
-# cut directly according to edges, the edges must be consecutive
-# e xx xx xx x xx xx

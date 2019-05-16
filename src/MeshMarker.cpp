@@ -1,7 +1,11 @@
 #include "MeshMarker.h"
 #include "queue"
 
-MeshMarker::MeshMarker(SurfaceMesh &mesh) : mesh_(mesh) { mesh.add_property(slice_); }
+MeshMarker::MeshMarker(SurfaceMesh &mesh) : mesh_(mesh)
+{
+    mesh.add_property(slice_);
+    ResetMarker();
+}
 
 void MeshMarker::ResetMarker()
 {
@@ -50,7 +54,10 @@ void MeshMarker::ConnectVertexPair(OpenMesh::VertexHandle v0, OpenMesh::VertexHa
                 q.push(neighbor);
                 mesh_.property(parent, neighbor) = front;
                 if (neighbor == v1)
+                {
                     found = true;
+                    break;
+                }
             }
         }
     }
@@ -88,7 +95,22 @@ void MeshMarker::ComputeCutGraph()
         FindAndMarkCutGraphNonSphere();
 }
 
-void MeshMarker::ConnectVerticesToCutGraph(std::vector<OpenMesh::VertexHandle> vertices) {}
+void MeshMarker::ConnectVertices(std::vector<OpenMesh::VertexHandle> vertices) 
+{
+    using namespace OpenMesh;
+    for (int i = 0; i < vertices.size() - 1; ++i)
+    {
+        ConnectVertexPair(vertices[i], vertices[i + 1]);
+    }
+}
+
+void MeshMarker::ConnectVerticesToCutGraph(std::vector<OpenMesh::VertexHandle> vertices)
+{
+    for (auto v : vertices)
+    {
+        ConnectVertexToCutGraph(v);
+    }
+}
 
 void MeshMarker::FindAndMarkCutGraphSphere()
 {
@@ -223,4 +245,88 @@ void MeshMarker::PruneCut()
             }
         }
     } while (cont);
+}
+
+void MeshMarker::ConnectVertexToCutGraph(OpenMesh::VertexHandle v0)
+{
+    SurfaceMesh &mesh = mesh_;
+    using namespace OpenMesh;
+    VPropHandleT<VertexHandle> parent;
+    VPropHandleT<bool> visited;
+    mesh.add_property(parent);
+    mesh.add_property(visited);
+
+    // reset visited
+    for (auto viter = mesh_.vertices_begin(); viter != mesh_.vertices_end(); ++viter)
+    {
+        VertexHandle v = *viter;
+        mesh_.property(visited, v) = false;
+    }
+
+    mesh_.property(visited, v0) = true;
+
+    std::queue<VertexHandle> q;
+    q.push(v0);
+
+    bool found = false;
+    VertexHandle connector;
+    while (!q.empty() && !found)
+    {
+        VertexHandle front = q.front();
+        q.pop();
+        for (auto vviter = mesh_.vv_iter(front); vviter.is_valid(); ++vviter)
+        {
+            VertexHandle neighbor = *vviter;
+            if (!mesh_.property(visited, neighbor))
+            {
+                if (OnSelectedEdge(neighbor, cut_graph_))
+                {
+                    found = true;
+                    mesh_.property(parent, neighbor) = front;
+                    connector = neighbor;
+                    break;
+                }
+                else if (OnSelectedEdge(neighbor, slice_))
+                {
+                    continue;
+                }
+
+                mesh_.property(visited, neighbor) = true;
+                q.push(neighbor);
+                mesh_.property(parent, neighbor) = front;
+            }
+        }
+    }
+    mesh_.remove_property(visited);
+
+    std::vector<VertexHandle> slice_vertices;
+    slice_vertices.push_back(connector);
+    while (slice_vertices.back() != v0)
+    {
+        slice_vertices.push_back(mesh_.property(parent, slice_vertices.back()));
+    }
+    mesh_.remove_property(parent);
+
+    std::reverse(slice_vertices.begin(), slice_vertices.end());
+
+    for (int i = 0; i < slice_vertices.size() - 1; ++i)
+    {
+        EdgeHandle e = mesh.edge_handle(mesh.find_halfedge(slice_vertices[i], slice_vertices[i + 1]));
+        if (!mesh.property(slice_, e))
+        {
+            mesh.property(slice_, e) = true;
+        }
+    }
+}
+
+bool MeshMarker::OnSelectedEdge(OpenMesh::VertexHandle v, const OpenMesh::EPropHandleT<bool> flag)
+{
+    for (auto veiter = mesh_.ve_iter(v); veiter.is_valid(); ++veiter)
+    {
+        if (mesh_.property(flag, *veiter))
+        {
+            return true;
+        }
+    }
+    return false;
 }
